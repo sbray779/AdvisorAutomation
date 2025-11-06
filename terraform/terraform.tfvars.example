@@ -1,0 +1,25 @@
+# Example Terraform variables file for Azure Advisor Automation
+# Copy this file to terraform.tfvars and customize the values
+
+# Environment configuration
+environment = "dev"
+location    = "East US 2"
+
+# Resource tags
+resource_tags = {
+  Environment = "Development"
+  Project     = "Azure-Advisor-Automation"
+  Purpose     = "Automated collection of Azure Advisor recommendations"
+  Owner       = "DevOps Team"
+  CostCenter  = "IT Operations"
+  CreatedBy   = "Terraform"
+}
+
+# Optional: Specify subscription ID (defaults to current subscription if not set)
+# subscription_id = "12345678-1234-1234-1234-123456789012"
+
+# Storage configuration
+storage_replication_type = "LRS"
+
+# Logic App configuration
+logic_app_sku = "WS1"
