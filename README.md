@@ -1,26 +1,24 @@
 # Azure Advisor Automation
 
-This project automates the collection of Azure Advisor recommendations using Azure Logic Apps. The solution runs on a daily schedule, queries the Azure Advisor APIs, and stores the recommendations as CSV files in Azure Storage.
+This project automates the collection of Azure Advisor recommendations using Azure Logic Apps. The solution runs on a daily schedule, queries the Azure Advisor APIs with automatic pagination, and stores the complete recommendations as JSON files in Azure Storage.
 
 ## 🏗️ Architecture Overview
 
-![Architecture Diagram](docs/architecture-diagram.png)
-
 The solution consists of:
-- **Logic App (Standard)**: Orchestrates the daily collection workflow
+- **Logic App (Consumption)**: Orchestrates the daily collection workflow with pagination support
 - **Managed Identity**: Provides secure authentication to Azure APIs
-- **Storage Account**: Stores CSV output files with recommendations
-- **App Service Plan**: Hosts the Logic App runtime
+- **Storage Account**: Stores JSON output files with recommendations
 - **Role Assignments**: Provides necessary permissions for API access
 
 ## ✨ Features
 
 - **Daily Automated Collection**: Runs at 6:00 AM UTC daily
+- **Automatic Pagination**: Handles large result sets using Azure Advisor API pagination ($skiptoken)
 - **Secure Authentication**: Uses Azure Managed Identity (no secrets required)
-- **CSV Output**: Structured data for easy analysis and reporting
-- **Error Handling**: Robust error handling and retry logic
-- **Infrastructure as Code**: Deploy with Bicep or Terraform
-- **Cost Optimized**: Uses consumption-based Logic App Standard tier
+- **JSON Output**: Complete raw recommendation data for maximum flexibility
+- **Error Handling**: Robust pagination loop with 100-iteration limit and 1-hour timeout
+- **Infrastructure as Code**: Fully automated Terraform deployment
+- **Cost Optimized**: Uses consumption-based Logic App pricing (pay per execution)
 
 ## 📋 Prerequisites
 
@@ -30,48 +28,19 @@ Before deploying this solution, ensure you have:
    - Contributor role on the target resource group
    - User Access Administrator role (for role assignments)
 
-2. **Development Tools** (choose one deployment method):
-   - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli) (for Bicep)
-   - [Terraform](https://www.terraform.io/downloads) (for Terraform)
-   - [PowerShell](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell) (optional)
+2. **Development Tools**:
+   - [Terraform](https://www.terraform.io/downloads) v1.5 or higher
+   - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
+   - [PowerShell](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell) (for deployment scripts)
 
 3. **Required Azure Resource Providers** (usually pre-registered):
    - Microsoft.Logic
    - Microsoft.Storage
-   - Microsoft.Web
    - Microsoft.ManagedIdentity
 
-## 🚀 Quick Start
+## 🚀 Quick Start - Terraform Deployment
 
-### Option 1: Deploy with Bicep
-
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd AdvisorAutomation
-   ```
-
-2. **Login to Azure**:
-   ```bash
-   az login
-   az account set --subscription "your-subscription-id"
-   ```
-
-3. **Create a resource group**:
-   ```bash
-   az group create --name "rg-advisor-automation-dev" --location "East US 2"
-   ```
-
-4. **Deploy the infrastructure**:
-   ```bash
-   cd bicep
-   az deployment group create \
-     --resource-group "rg-advisor-automation-dev" \
-     --template-file main.bicep \
-     --parameters main.bicepparam
-   ```
-
-### Option 2: Deploy with Terraform
+Terraform deploys **both infrastructure and the complete workflow definition** automatically!
 
 1. **Clone the repository**:
    ```bash
@@ -79,10 +48,10 @@ Before deploying this solution, ensure you have:
    cd AdvisorAutomation/terraform
    ```
 
-2. **Configure variables**:
+2. **Login to Azure**:
    ```bash
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars with your specific values
+   az login
+   az account set --subscription "your-subscription-id"
    ```
 
 3. **Initialize and deploy**:
@@ -93,51 +62,92 @@ Before deploying this solution, ensure you have:
    terraform apply
    ```
 
+The Terraform deployment automatically:
+- Creates all infrastructure resources (Logic App, Storage, Managed Identity)
+- Deploys the complete Logic App workflow definition with pagination
+- Configures all triggers, actions, and managed identity authentication
+- Sets up role assignments for secure API access (Reader on subscription, Storage Blob Data Contributor)
+
+**No manual workflow deployment required!**
+
+See [terraform/README.md](./terraform/README.md) for detailed deployment instructions and troubleshooting.
+
 ## 📊 Output Data Structure
 
-The generated CSV files contain the following columns:
+The workflow generates JSON files with the following structure:
 
-| Column | Description | Example |
-|--------|-------------|---------|
-| SubscriptionId | Azure subscription ID | `12345678-1234-1234-1234-123456789012` |
-| ResourceGroup | Resource group name | `rg-production-web` |
-| ResourceName | Azure resource name | `vm-web-01` |
-| ResourceType | Azure resource type | `Microsoft.Compute/virtualMachines` |
-| RecommendationId | Unique recommendation ID | `rec-12345678` |
-| Category | Recommendation category | `Cost`, `Security`, `Performance`, `Reliability` |
-| Impact | Impact level | `High`, `Medium`, `Low` |
-| ShortDescription | Brief description | `Resize or shutdown underutilized virtual machines` |
-| Description | Detailed description | `Your virtual machine is underutilized...` |
-| RecommendationText | Action to take | `Consider resizing to a smaller VM size...` |
-| LastUpdated | When recommendation was last updated | `2024-01-15T10:30:00Z` |
-| SuppressionIds | List of suppression IDs | `supp-123;supp-456` |
+```json
+{
+  "collectedAt": "2025-11-18T06:00:00Z",
+  "subscriptionId": "12345678-1234-1234-1234-123456789012",
+  "recommendationCount": 150,
+  "recommendations": [
+    {
+      "id": "/subscriptions/.../providers/Microsoft.Advisor/recommendations/...",
+      "name": "recommendation-guid",
+      "type": "Microsoft.Advisor/recommendations",
+      "properties": {
+        "category": "Cost",
+        "impact": "High",
+        "impactedField": "Microsoft.Compute/virtualMachines",
+        "impactedValue": "vm-web-01",
+        "lastUpdated": "2025-11-17T10:30:00Z",
+        "recommendationTypeId": "...",
+        "shortDescription": {
+          "problem": "Underutilized virtual machine",
+          "solution": "Resize or shutdown virtual machine"
+        },
+        "extendedProperties": {},
+        "resourceMetadata": {
+          "resourceId": "/subscriptions/.../resourceGroups/rg-prod/providers/Microsoft.Compute/virtualMachines/vm-web-01"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Key Fields
+
+| Field | Description |
+|-------|-------------|
+| `collectedAt` | Timestamp when recommendations were collected |
+| `subscriptionId` | Azure subscription ID |
+| `recommendationCount` | Total number of recommendations |
+| `recommendations[]` | Array of all recommendation objects from Azure Advisor API |
+
+Each recommendation contains the complete Azure Advisor API response with category, impact, affected resources, and detailed guidance.
 
 ## 📁 File Naming Convention
 
-CSV files are automatically named using the pattern:
+JSON files are automatically named using the pattern:
 ```
-advisor-recommendations-YYYY-MM-DD.csv
+advisor-recommendations-YYYY-MM-DD-HHmmss.json
 ```
 
 Examples:
-- `advisor-recommendations-2024-01-15.csv`
-- `advisor-recommendations-2024-01-16.csv`
+- `advisor-recommendations-2025-11-18-060000.json`
+- `advisor-recommendations-2025-11-19-060000.json`
+
+## 🔄 How Pagination Works
+
+The Logic App workflow handles large result sets automatically:
+
+1. **Initial Request**: Queries Azure Advisor API for recommendations
+2. **Parse Response**: Extracts recommendations and checks for `nextLink` property
+3. **Loop**: While `nextLink` exists, fetch next page and append to results array
+4. **Complete**: When no more pages, save all recommendations to JSON blob
+
+The workflow uses an `Until` loop with:
+- **100 iteration limit**: Prevents infinite loops
+- **1-hour timeout**: Ensures workflow doesn't run indefinitely
+- **$skiptoken handling**: Azure Advisor API returns proper continuation tokens in `nextLink`
 
 ## 🔧 Configuration
 
-### Environment Variables
+### Modifying the Schedule
 
-The Logic App uses the following application settings:
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `WORKFLOWS_SUBSCRIPTION_ID` | Target subscription for recommendations | Current subscription |
-| `WORKFLOWS_STORAGE_ACCOUNT_NAME` | Storage account for CSV output | Created during deployment |
-| `WORKFLOWS_CONTAINER_NAME` | Storage container name | `advisor-recommendations` |
-
-### Customizing the Schedule
-
-To modify the execution schedule, update the Logic App workflow trigger:
+To change the execution schedule, update the workflow trigger in `terraform/workflow-definition.json.tpl`:
 
 ```json
 {
@@ -153,6 +163,16 @@ To modify the execution schedule, update the Logic App workflow trigger:
 
 Available frequency options: `Day`, `Week`, `Month`, `Hour`, `Minute`
 
+After modifying, redeploy with `terraform apply`.
+
+### Changing Target Subscription
+
+Update the `subscription_id` variable in `terraform/main.tf` or provide at deployment:
+
+```bash
+terraform apply -var="subscription_id=your-subscription-id"
+```
+
 ## 🔐 Security
 
 ### Authentication & Authorization
@@ -160,7 +180,7 @@ Available frequency options: `Day`, `Week`, `Month`, `Hour`, `Minute`
 - **Managed Identity**: Eliminates the need for stored credentials
 - **RBAC Permissions**: Minimal required permissions assigned
   - Reader role on subscription (for Advisor API access)
-  - Storage Blob Data Contributor on storage account
+  - Storage Blob Data Contributor on storage account (for blob write access)
 - **Network Security**: Storage account configured with secure defaults
 - **TLS Encryption**: All communications use TLS 1.2+
 
@@ -169,107 +189,161 @@ Available frequency options: `Day`, `Week`, `Month`, `Hour`, `Minute`
 - **Encryption at Rest**: Storage account uses Microsoft-managed keys
 - **Encryption in Transit**: HTTPS-only access enforced
 - **Access Control**: Private storage containers, no public access
-- **Retention**: 30-day retention policy for blobs
 
 ## 📈 Monitoring & Troubleshooting
 
-### Logic App Monitoring
+### Viewing Logic App Run History
 
-1. **Azure Portal**: Navigate to Logic App → Workflow → Run History
-2. **Application Insights**: Enable for detailed telemetry
-3. **Azure Monitor**: Set up alerts for failed runs
+**Option 1: Azure Portal**
+```
+Navigate to: Logic App → Run History
+```
+
+**Option 2: Azure CLI**
+```bash
+# Get latest run
+az resource show \
+  --ids "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Logic/workflows/{logic-app-name}" \
+  --query "properties.state"
+```
+
+**Option 3: Manual Trigger** (for testing)
+```bash
+az rest --method POST \
+  --uri "https://management.azure.com/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Logic/workflows/{logic-app-name}/triggers/DailySchedule/run?api-version=2016-06-01"
+```
+
+### Viewing Output Files
+
+```bash
+# List all recommendation files
+az storage blob list \
+  --account-name {storage-account-name} \
+  --container-name advisor-recommendations \
+  --auth-mode login \
+  --output table
+
+# Download a specific file
+az storage blob download \
+  --account-name {storage-account-name} \
+  --container-name advisor-recommendations \
+  --name advisor-recommendations-2025-11-18-060000.json \
+  --file recommendations.json \
+  --auth-mode login
+```
 
 ### Common Issues
 
 | Issue | Cause | Solution |
 |-------|-------|---------|
-| Authentication errors | Insufficient permissions | Verify role assignments |
-| Storage write failures | Storage account access | Check managed identity permissions |
-| Advisor API errors | API rate limits | Implement exponential backoff |
-| Empty results | No recommendations | Verify subscription has resources |
-
-### Debugging Steps
-
-1. **Check Logic App Run History**:
-   ```bash
-   az logicapp show --name "your-logic-app" --resource-group "your-rg"
-   ```
-
-2. **Verify Role Assignments**:
-   ```bash
-   az role assignment list --assignee "managed-identity-principal-id"
-   ```
-
-3. **Test Storage Access**:
-   ```bash
-   az storage blob list --account-name "your-storage" --container-name "advisor-recommendations"
-   ```
+| Workflow fails on "Until_No_More_Pages" | Array append issue | Ensure using latest workflow template with Foreach loop |
+| Authentication errors | Insufficient permissions | Verify role assignments with `az role assignment list` |
+| Storage write failures | Missing Storage Blob Data Contributor | Check managed identity has correct role on storage account |
+| Empty recommendations array | No recommendations available | Normal if subscription has no advisor recommendations |
+| Pagination not working | Incorrect nextLink handling | Verify workflow uses `nextLink` property from API response |
 
 ## 💰 Cost Estimation
 
-### Monthly Cost Breakdown (East US 2, approximate)
+### Monthly Cost Breakdown (Central US, approximate)
 
 | Resource | Usage | Monthly Cost |
 |----------|-------|-------------|
-| Logic App Standard (WS1) | 744 hours | ~$150 |
+| Logic App (Consumption) | 30 executions/month | ~$0.00* |
 | Storage Account (LRS) | 1 GB data, minimal transactions | ~$0.05 |
 | Managed Identity | Included | Free |
-| **Total** | | **~$150** |
+| **Total** | | **< $1/month** |
+
+*First 4,000 workflow actions per month are free. A single daily run with 200 recommendations across 2 pages = ~8 actions/day × 30 days = 240 actions/month (well within free tier).
 
 ### Cost Optimization Tips
 
-1. **Right-size Logic App**: Start with WS1, monitor usage
-2. **Storage Tier**: Use Cool tier for long-term archival
-3. **Retention Policy**: Implement lifecycle management
+1. **Consumption vs Standard**: Consumption tier is ideal for scheduled workloads
+2. **Storage Tier**: Use Cool tier for long-term archival (lifecycle management)
+3. **Retention Policy**: Implement automatic deletion of old files if not needed
 4. **Resource Tagging**: Enable cost tracking and allocation
 
 ## 🔄 Maintenance
 
 ### Regular Tasks
 
-- **Monthly**: Review Logic App performance and costs
-- **Quarterly**: Update Bicep/Terraform templates
-- **Annually**: Review and update role assignments
+- **Monthly**: Review Logic App run history for failures
+- **Quarterly**: Review and update Terraform templates
+- **As Needed**: Update workflow logic for API changes
 
-### Upgrade Path
+### Updating the Workflow
 
-1. **Update Templates**: Pull latest changes from repository
-2. **Test in Development**: Deploy to test environment first
-3. **Plan Deployment**: Schedule maintenance window
-4. **Deploy**: Use Infrastructure as Code for consistent updates
+1. **Modify Template**: Edit `terraform/workflow-definition.json.tpl`
+2. **Test Locally**: Validate JSON syntax
+3. **Deploy**: Run `terraform apply`
+4. **Verify**: Check Logic App run history after next scheduled run
+
+## 🛠️ Project Structure
+
+```
+AdvisorAutomation/
+├── .github/
+│   └── copilot-instructions.md    # GitHub Copilot context
+├── scripts/
+│   └── deploy-workflow.ps1        # Manual workflow deployment script
+├── terraform/
+│   ├── main.tf                    # Main infrastructure configuration
+│   ├── variables.tf               # Variable definitions
+│   ├── outputs.tf                 # Output values
+│   ├── workflow-definition.json.tpl # Logic App workflow template
+│   ├── deploy-workflow.ps1        # Terraform helper script
+│   └── README.md                  # Terraform-specific documentation
+└── README.md                      # This file
+```
+
+## 📝 What's Changed (Latest Updates)
+
+### Recent Improvements
+
+✅ **Switched to Consumption Logic Apps**: More cost-effective for scheduled workloads  
+✅ **JSON Output**: Raw API data instead of parsed CSV for maximum flexibility  
+✅ **Pagination Support**: Automatic handling of large result sets using `$skiptoken`  
+✅ **Fully Automated Deployment**: Terraform deploys infrastructure + workflow in one step  
+✅ **Simplified Architecture**: Removed App Service Plan dependency  
+✅ **Removed Bicep Templates**: Terraform-only deployment for consistency  
+
+### Breaking Changes from Previous Versions
+
+- **Output Format**: Changed from CSV to JSON
+- **Logic App Type**: Changed from Standard to Consumption
+- **Deployment Method**: Bicep templates removed, Terraform only
+- **File Naming**: Added timestamp with seconds for uniqueness
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
+Contributions are welcome! To contribute:
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Test thoroughly
+4. Test thoroughly in a dev environment
 5. Submit a pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🆘 Support
 
-For support and questions:
+For issues and questions:
 
 1. **GitHub Issues**: Create an issue for bugs or feature requests
-2. **Documentation**: Check the `/docs` folder for detailed guides
+2. **Terraform Documentation**: See [terraform/README.md](./terraform/README.md)
 3. **Azure Support**: For Azure-specific issues, contact Azure Support
 
 ## 📚 Additional Resources
 
 - [Azure Advisor Documentation](https://docs.microsoft.com/en-us/azure/advisor/)
+- [Azure Advisor REST API Reference](https://docs.microsoft.com/en-us/rest/api/advisor/)
 - [Logic Apps Documentation](https://docs.microsoft.com/en-us/azure/logic-apps/)
 - [Azure Managed Identity](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/)
-- [Bicep Documentation](https://docs.microsoft.com/en-us/azure/azure-resource-manager/bicep/)
 - [Terraform Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 
 ---
 
-**Created with ❤️ for the Azure community**
+**Last Updated**: November 2025  
+**Version**: 2.0 (JSON output with pagination)

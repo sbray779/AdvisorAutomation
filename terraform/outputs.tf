@@ -27,17 +27,12 @@ output "storage_container_name" {
 
 output "logic_app_name" {
   description = "Name of the Logic App"
-  value       = azurerm_logic_app_standard.advisor_automation.name
+  value       = azurerm_logic_app_workflow.advisor_automation.name
 }
 
 output "logic_app_id" {
   description = "Logic App resource ID"
-  value       = azurerm_logic_app_standard.advisor_automation.id
-}
-
-output "logic_app_default_hostname" {
-  description = "Logic App default hostname"
-  value       = azurerm_logic_app_standard.advisor_automation.default_hostname
+  value       = azurerm_logic_app_workflow.advisor_automation.id
 }
 
 output "managed_identity_name" {
@@ -67,10 +62,20 @@ output "deployment_summary" {
   value = {
     resource_group    = azurerm_resource_group.advisor_automation.name
     storage_account   = azurerm_storage_account.advisor_data.name
-    logic_app         = azurerm_logic_app_standard.advisor_automation.name
+    logic_app         = azurerm_logic_app_workflow.advisor_automation.name
     managed_identity  = azurerm_user_assigned_identity.advisor_automation.name
     container_name    = azurerm_storage_container.advisor_recommendations.name
     location          = var.location
     environment       = var.environment
   }
+}
+
+output "logic_app_trigger_url" {
+  description = "Logic App callback URL for manual trigger (use az rest to retrieve)"
+  value       = "Run: az rest --method POST --uri 'https://management.azure.com${azurerm_logic_app_workflow.advisor_automation.id}/triggers/DailySchedule/run?api-version=2016-06-01'"
+}
+
+output "view_logic_app_portal" {
+  description = "Azure Portal URL for Logic App"
+  value       = "https://portal.azure.com/#@/resource${azurerm_logic_app_workflow.advisor_automation.id}"
 }
