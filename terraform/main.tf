@@ -95,7 +95,27 @@ resource "azurerm_storage_container" "advisor_recommendations" {
   storage_account_name = azurerm_storage_account.advisor_data.name
 
   metadata = {
-    purpose = "Azure Advisor recommendations CSV storage"
+    purpose = "Azure Advisor recommendations JSON storage"
+  }
+}
+
+# Storage Container for Reservation recommendations
+resource "azurerm_storage_container" "reservation_recommendations" {
+  name                 = "reservation-recommendations"
+  storage_account_name = azurerm_storage_account.advisor_data.name
+
+  metadata = {
+    purpose = "Azure Reservation recommendations JSON storage"
+  }
+}
+
+# Storage Container for Savings Plan recommendations
+resource "azurerm_storage_container" "savingsplan_recommendations" {
+  name                 = "savingsplan-recommendations"
+  storage_account_name = azurerm_storage_account.advisor_data.name
+
+  metadata = {
+    purpose = "Azure Savings Plan recommendations JSON storage"
   }
 }
 
@@ -112,10 +132,12 @@ resource "azurerm_storage_container" "advisor_recommendations" {
 # Logic App Workflow Definition
 locals {
   workflow_definition = templatefile("${path.module}/workflow-definition.json.tpl", {
-    subscription_id      = data.azurerm_subscription.current.subscription_id
-    storage_account_name = azurerm_storage_account.advisor_data.name
-    container_name       = azurerm_storage_container.advisor_recommendations.name
-    managed_identity_id  = azurerm_user_assigned_identity.advisor_automation.id
+    subscription_id                = data.azurerm_subscription.current.subscription_id
+    storage_account_name           = azurerm_storage_account.advisor_data.name
+    advisor_container_name         = azurerm_storage_container.advisor_recommendations.name
+    reservation_container_name     = azurerm_storage_container.reservation_recommendations.name
+    savingsplan_container_name     = azurerm_storage_container.savingsplan_recommendations.name
+    managed_identity_id            = azurerm_user_assigned_identity.advisor_automation.id
   })
 }
 
